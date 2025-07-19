@@ -1,18 +1,18 @@
 "use client"
 
-import { Button } from "@medusajs/ui"
-import { isEqual } from "lodash"
+import { Button, Input } from "@medusajs/ui"
 import { useParams } from "next/navigation"
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { useIntersection } from "@lib/hooks/use-in-view"
+import { HttpTypes } from "@medusajs/types"
 import Divider from "@modules/common/components/divider"
-import OptionSelect from "@modules/products/components/product-actions/option-select"
+import OptionSelect from "@modules/products/components/option-select"
+import { isEqual } from "lodash"
 
 import MobileActions from "./mobile-actions"
 import ProductPrice from "../product-price"
 import { addToCart } from "@lib/data/cart"
-import { HttpTypes } from "@medusajs/types"
+import { useIntersection } from "@lib/hooks/use-in-view"
 
 type ProductActionsProps = {
   product: HttpTypes.StoreProduct
@@ -20,12 +20,12 @@ type ProductActionsProps = {
   disabled?: boolean
 }
 
-const optionsAsKeymap = (variantOptions: any) => {
-  return variantOptions?.reduce((acc: Record<string, string | undefined>, varopt: any) => {
-    if (varopt.option && varopt.value !== null && varopt.value !== undefined) {
-      acc[varopt.option.title] = varopt.value
-    }
-    return acc
+function optionsAsKeymap(
+  variantOptions: HttpTypes.StoreProductVariantOption[] | undefined
+) {
+  return variantOptions?.reduce((keymap: Record<string, string>, varOpt) => {
+    keymap[varOpt.option_id!] = varOpt.option_value!
+    return keymap
   }, {})
 }
 
@@ -36,6 +36,7 @@ export default function ProductActions({
 }: ProductActionsProps) {
   const [options, setOptions] = useState<Record<string, string | undefined>>({})
   const [isAdding, setIsAdding] = useState(false)
+  const [quantity, setQuantity] = useState(1)
   const countryCode = useParams().countryCode as string
 
   // If there is only 1 variant, preselect the options
@@ -99,13 +100,23 @@ export default function ProductActions({
 
     setIsAdding(true)
 
-    await addToCart({
-      variantId: selectedVariant.id,
-      quantity: 1,
-      countryCode,
-    })
+    // Add multiple items based on quantity
+    for (let i = 0; i < quantity; i++) {
+      await addToCart({
+        variantId: selectedVariant.id,
+        quantity: 1,
+        countryCode,
+      })
+    }
 
     setIsAdding(false)
+    // Reset quantity after adding
+    setQuantity(1)
+  }
+
+  const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value) || 1
+    setQuantity(Math.max(1, value))
   }
 
   return (
@@ -135,20 +146,39 @@ export default function ProductActions({
 
         <ProductPrice product={product} variant={selectedVariant} />
 
-        <Button
-          onClick={handleAddToCart}
-          disabled={!inStock || !selectedVariant || !!disabled || isAdding}
-          variant="primary"
-          className="w-full h-10"
-          isLoading={isAdding}
-          data-testid="add-product-button"
-        >
-          {!selectedVariant
-            ? "Select variant"
-            : !inStock
-            ? "Out of stock"
-            : "Add to cart"}
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label htmlFor="quantity" className="text-sm text-ui-fg-subtle">
+              Quantity:
+            </label>
+            <Input
+              id="quantity"
+              type="number"
+              min="1"
+              max="9999"
+              value={quantity}
+              onChange={handleQuantityChange}
+              className="w-20 text-center"
+              disabled={!!disabled || isAdding}
+            />
+          </div>
+          
+          <Button
+            onClick={handleAddToCart}
+            disabled={!inStock || !selectedVariant || !!disabled || isAdding}
+            variant="primary"
+            className="flex-1 h-10"
+            isLoading={isAdding}
+            data-testid="add-product-button"
+          >
+            {!selectedVariant
+              ? "Select variant"
+              : !inStock
+              ? "Out of stock"
+              : `Add ${quantity} to cart`}
+          </Button>
+        </div>
+
         <MobileActions
           product={product}
           variant={selectedVariant}

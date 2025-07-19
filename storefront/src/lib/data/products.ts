@@ -40,6 +40,38 @@ export const getProductByHandle = cache(async function (
     .then(({ products }) => products[0])
 })
 
+export const getProductBySku = cache(async function (
+  sku: string,
+  countryCode: string
+) {
+  const region = await getRegion(countryCode)
+  if (!region) {
+    return null
+  }
+
+  // Search through all products to find variant with matching SKU
+  const { products } = await sdk.store.product.list(
+    {
+      region_id: region.id,
+      fields: "*variants.calculated_price,+variants.inventory_quantity",
+    },
+    { next: { tags: ["products"] } }
+  )
+
+  // Find the variant with matching SKU
+  for (const product of products) {
+    const variant = product.variants?.find(v => v.sku === sku)
+    if (variant) {
+      return {
+        ...variant,
+        product
+      }
+    }
+  }
+
+  return null
+})
+
 export const getProductsList = cache(async function ({
   pageParam = 1,
   queryParams,
